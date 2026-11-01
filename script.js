@@ -155,7 +155,8 @@ addEventListener('resize', queuePortraitSpread, {passive:true});
 portraitReducedMotion.addEventListener('change', queuePortraitSpread);
 updatePortraitSpread();
 
-// Case-study cards form a reversible stack: the incoming card pushes the active one back.
+// Case-study cards form a reversible stack. Every card stays fully visible and interactive;
+// depth comes from position and scale only, never a dimming overlay.
 const projectCards = Array.from(document.querySelectorAll('.project'));
 const projectReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let projectFramePending = false;
@@ -166,8 +167,6 @@ function updateProjectStack() {
     projectCards.forEach(card => {
       card.style.removeProperty('--stack-scale');
       card.style.removeProperty('--stack-lift');
-      card.style.removeProperty('--stack-dim');
-      card.style.removeProperty('--scene-opacity');
       card.style.removeProperty('pointer-events');
     });
     return;
@@ -175,22 +174,14 @@ function updateProjectStack() {
   const stickyTop = 112;
   // Give every handoff a longer scroll distance so the stack feels unhurried.
   const revealStart = innerHeight * 1.1;
-  const sceneTrigger = innerHeight * .8;
-  const activeCardIndex = projectCards.reduce((activeIndex, card, index) => (
-    card.getBoundingClientRect().top <= sceneTrigger ? index : activeIndex
-  ), 0);
   projectCards.forEach((card, index) => {
     const incoming = projectCards[index + 1];
     const incomingTop = incoming ? incoming.getBoundingClientRect().top : revealStart;
     const progress = incoming ? Math.max(0, Math.min(1, (revealStart - incomingTop) / (revealStart - stickyTop))) : 0;
-    // The outgoing card stays legible behind the incoming card, but leaves the interaction layer.
+    // A restrained transform keeps the outgoing study readable behind the next one.
     card.style.setProperty('--stack-scale', (1 - progress * .052).toFixed(4));
     card.style.setProperty('--stack-lift', `${Math.round(-progress * 14)}px`);
-    card.style.setProperty('--stack-dim', (1 - progress * .42).toFixed(4));
-    // Keep the scene limited to the outgoing and incoming cards only.
-    const isInScene = index === activeCardIndex || index === activeCardIndex - 1;
-    card.style.setProperty('--scene-opacity', isInScene ? '1' : '0');
-    card.style.pointerEvents = isInScene && progress <= .14 ? 'auto' : 'none';
+    card.style.pointerEvents = 'auto';
   });
 }
 function queueProjectStack() {
@@ -235,3 +226,21 @@ addEventListener('scroll', queueGraphicsMotion, {passive:true});
 addEventListener('resize', queueGraphicsMotion, {passive:true});
 graphicsReducedMotion.addEventListener('change', queueGraphicsMotion);
 updateGraphicsMotion();
+
+// Small entrance cues improve hierarchy without competing with the portfolio work.
+const revealReducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const revealTargets = document.querySelectorAll(
+  '.about-copy, .portrait-stage, .section-heading, .showreel-marquees, .testimonials-marquee, .graphics .artwork, .resume-cta, .footer-profile, .footer .contact'
+);
+if (!revealReducedMotion.matches && 'IntersectionObserver' in window) {
+  revealTargets.forEach(target => target.classList.add('reveal'));
+  const revealObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: .12, rootMargin: '0px 0px -6% 0px' });
+  revealTargets.forEach(target => revealObserver.observe(target));
+}
